@@ -7,47 +7,26 @@ import cv2
 class ImageParser:
 
     def __init__(self):
-        self.image = self.read_image()
+        # self.image = cv2.imread('image-2.jpg')
+        # self.image = cv2.imread('image-2.jpg')
+        self.image = cv2.imread('test.png')
 
     def run_camera(self):
         # testing from webcam
-        # 1
         camera = cv2.VideoCapture(0)
         ret, frame = camera.read()
-        # 2
         while ret:
             ret, frame = camera.read()
             frame = ip.read_barcodes(frame)
             cv2.imshow('Barcode/QR code reader', frame)
             if cv2.waitKey(1) and 0xFF == 27:
                 break
-        # 3
         camera.release()
         cv2.destroyAllWindows()
 
-    def run_image(self):
-        barcodes = pyzbar.decode(self.image)
-        file = open('barcode_result.txt', mode='a')
-        for barcode in barcodes:
-            x, y, w, h = barcode.rect
-            cv2.rectangle(self.image, (x, y), (x + w, y + h), (0, 0, 255), 2)
-            barcode_data = barcode.data.decode("utf-8")
-            barcode_type = barcode.type
-            text = f"{barcode_data} ({barcode_type})"
-            cv2.putText(self.image, text, (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX,
-                        0.5, (0, 0, 255), 2)
-            print(f"[INFO] Found {barcode_type} barcode: {barcode_data}")
-
-            file.write(f"Recognized Barcode: {barcode_data}\n")
-        file.close()
-        cv2.imshow("Image", self.image)
-        cv2.waitKey(0)
-
-    @staticmethod
-    def read_image(filepath=None):
-        image = cv2.imread('test.png')
-        # image = cv2.imread('image.jpg')
-        return image
+    def run(self):
+        # self.find_barcodes(self.image)
+        self.read_barcodes(self.image)
 
     @staticmethod
     def get_center(contour):
@@ -57,48 +36,28 @@ class ImageParser:
         return cX, cY
 
     @staticmethod
-    def find_rectangles(img):
-        filtered = np.zeros((img.shape[0], img.shape[1], 1), dtype=np.uint8)
-        img = cv2.GaussianBlur(img, (5, 5), 0)
-        barcodes = pyzbar.decode(img)
-        print(barcodes)
-        for gray in cv2.split(img):
-            for thrs in range(50, 200, 1):
-                _retval, bin = cv2.threshold(gray, thrs, 255, cv2.THRESH_BINARY)
-                contours, h = cv2.findContours(~bin, cv2.RETR_CCOMP,
-                                               cv2.CHAIN_APPROX_SIMPLE)
-                contours = [contours[i] for i in range(len(contours)) if
-                            h[0][i][3] == -1]
-                for cnt in contours:
-                    cnt_len = cv2.arcLength(cnt, True)
-                    poly = cv2.approxPolyDP(cnt, 0.02 * cnt_len, True)
-                    w, h = cv2.minAreaRect(cnt)[1]
-                    if len(poly) < 8 and cv2.contourArea(
-                            cnt) > 10 and cv2.contourArea(poly) < 1000 and (
-                            h / w) > 5:
-                        cv2.drawContours(filtered, [cnt], -1, 255, -1)
-        return filtered
-
-    @staticmethod
     def dist(p1, p2):
         return math.sqrt((p1[0] - p2[0]) ** 2 + (p1[1] - p2[1]) ** 2)
 
     @staticmethod
-    def read_barcodes(frame):
-        barcodes = pyzbar.decode(frame)
-        for b in barcodes:
-            x, y, w, h = b.rect
-            # 1
-            barcode_info = b.data.decode('utf-8')
-            cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
-            # 2
-            font = cv2.FONT_HERSHEY_SIMPLEX
-            cv2.putText(frame, barcode_info, (x + 6, y - 6), font, 2.0,
-                        (255, 255, 255), 1)
-            # 3
-            with open("barcode_result.txt", mode='w') as file:
-                file.write("Recognized Barcode: " + barcode_info)
-        return frame
+    def read_barcodes(image):
+        file = open('barcode_result.txt', mode='a')
+        barcodes = pyzbar.decode(image)
+        codes = list()
+        for barcode in barcodes:
+            x, y, w, h = barcode.rect
+            cv2.rectangle(image, (x, y), (x + w, y + h), (0, 0, 255), 2)
+            barcode_data = barcode.data.decode("utf-8")
+            barcode_type = barcode.type
+            text = f"{barcode_data} ({barcode_type})"
+            codes.append({'data': barcode_data, 'type': barcode_type})
+            cv2.putText(image, text, (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX,
+                        0.5, (0, 0, 255), 2)
+            print(f"[INFO] Found {barcode_type} barcode: {barcode_data}")
+
+            file.write(f"Recognized Barcode: {barcode_data}\n")
+        file.close()
+        return codes
 
     def find_barcodes(self, image):
         """this is the final handler"""
@@ -161,12 +120,30 @@ class ImageParser:
 
         cv2.destroyWindow("image")
         cv2.imshow("image", image)
-        cv2.destroyWindow("thresh")
-        cv2.imshow("thresh", thresh)
         cv2.waitKey(0)
+
+    def find_rectangles(self, img):
+        filtered = np.zeros((img.shape[0], img.shape[1], 1), dtype=np.uint8)
+        img = cv2.GaussianBlur(img, (5, 5), 0)
+
+        for gray in cv2.split(img):
+            for thrs in range(50, 200, 1):
+                _retval, bin = cv2.threshold(gray, thrs, 255, cv2.THRESH_BINARY)
+                contours, h = cv2.findContours(~bin, cv2.RETR_CCOMP,
+                                               cv2.CHAIN_APPROX_SIMPLE)
+                contours = [contours[i] for i in range(len(contours)) if
+                            h[0][i][3] == -1]
+                for cnt in contours:
+                    cnt_len = cv2.arcLength(cnt, True)
+                    poly = cv2.approxPolyDP(cnt, 0.02 * cnt_len, True)
+                    w, h = cv2.minAreaRect(cnt)[1]
+                    if len(poly) < 8 and cv2.contourArea(
+                            cnt) > 10 and cv2.contourArea(poly) < 1000 and (
+                            h / w) > 5:
+                        cv2.drawContours(filtered, [cnt], -1, 255, -1)
+        return filtered
 
 
 if __name__ == "__main__":
     ip = ImageParser()
-    # ip.run()
-    ip.run_image()
+    ip.run()
